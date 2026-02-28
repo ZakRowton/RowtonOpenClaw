@@ -1,0 +1,61 @@
+// OpenClaw config for NEUS deployment.
+// Bootstrapped on first deploy. OLLAMA_API_KEY comes from container env.
+// __GATEWAY_TOKEN__ replaced by deploy workflow from OPENCLAW_HOSTINGER_GATEWAY_TOKEN secret.
+{
+  meta: { lastTouchedVersion: "2026.2.23", lastTouchedAt: "2026-02-27T12:00:00.000Z" },
+  env: { vars: { OLLAMA_API_KEY: "" } },
+  update: { channel: "stable", checkOnStart: false },
+  browser: { headless: true, noSandbox: true, defaultProfile: "openclaw" },
+  models: {
+    mode: "merge",
+    providers: {
+      ollama: { models: [] },
+      "neus-ai": {
+        baseUrl: "https://ai.neus.network/v1",
+        apiKey: "${OLLAMA_API_KEY}",
+        api: "openai-completions",
+        models: [
+          {
+            id: "qwen3-coder-next",
+            name: "Qwen3 Coder Next",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 262144,
+            maxTokens: 32000
+          }
+        ]
+      }
+    }
+  },
+  agents: {
+    defaults: {
+      model: { primary: "neus-ai/qwen3-coder-next" },
+      models: { "neus-ai/qwen3-coder-next": { alias: "Qwen3-coder", streaming: true } }
+    },
+    list: [{ id: "main", name: "main", model: "neus-ai/qwen3-coder-next" }]
+  },
+  commands: { native: "auto", nativeSkills: "auto", bash: true, restart: true, ownerDisplay: "raw" },
+  gateway: {
+    mode: "local",
+    controlUi: {
+      dangerouslyAllowHostHeaderOriginFallback: true,
+      allowInsecureAuth: true,
+      dangerouslyDisableDeviceAuth: true
+    },
+    auth: { mode: "token", token: "__GATEWAY_TOKEN__" },
+    trustedProxies: ["127.0.0.1/32"]
+  },
+  plugins: {
+    entries: {
+      whatsapp: { enabled: true },
+      discord: { enabled: true },
+      imessage: { enabled: false },
+      telegram: { enabled: true },
+      slack: { enabled: true },
+      nostr: { enabled: true },
+      signal: { enabled: false },
+      googlechat: { enabled: true }
+    }
+  }
+}

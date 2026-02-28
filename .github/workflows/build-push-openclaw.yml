@@ -1,0 +1,181 @@
+# Build, Push & Deploy: OpenClaw → ACR → Hostinger VPS
+#
+# Push to main/master → build image → push to neusregistry.azurecr.io/openclaw → deploy to Hostinger.
+# One-click: no manual steps after push.
+#
+# Secrets required (neus/claw repo → Settings → Secrets):
+#   Build+Push: NEUSCAESTAGING_REGISTRY_USERNAME, NEUSCAESTAGING_REGISTRY_PASSWORD
+#   Deploy:     OPENCLAW_HOSTINGER_SSH_KEY, OPENCLAW_HOSTINGER_HOST, OPENCLAW_HOSTINGER_USER,
+#               OPENCLAW_HOSTINGER_GATEWAY_TOKEN, NEUS_AI_OLLAMA_API_KEY
+
+name: Build, Push & Deploy OpenClaw
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to Hostinger after build'
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: build-deploy-openclaw-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACR_LOGIN_SERVER: neusregistry.azurecr.io
+  IMAGE_REPO: openclaw
+
+jobs:
+  build_push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.NEUSCAESTAGING_REGISTRY_USERNAME }}
+          password: ${{ secrets.NEUSCAESTAGING_REGISTRY_PASSWORD }}
+
+      - name: Set image tags
+        id: meta
+        run: |
+          SHA_TAG="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:${{ github.sha }}"
+          LATEST_TAG="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:latest"
+          echo "sha_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "SHA: $SHA_TAG"
+          echo "Latest: $LATEST_TAG"
+
+      - name: Build & Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "## OpenClaw image built & pushed" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA tag | \`${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Latest  | \`${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:latest\` |" >> $GITHUB_STEP_SUMMARY
+
+  deploy_hostinger:
+    needs: build_push
+    if: >
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout (for deploy files)
+        uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        run: |
+          MISSING=""
+          [ -z "${{ secrets.OPENCLAW_HOSTINGER_SSH_KEY }}" ]        && MISSING="$MISSING OPENCLAW_HOSTINGER_SSH_KEY"
+          [ -z "${{ secrets.OPENCLAW_HOSTINGER_HOST }}" ]           && MISSING="$MISSING OPENCLAW_HOSTINGER_HOST"
+          [ -z "${{ secrets.OPENCLAW_HOSTINGER_USER }}" ]           && MISSING="$MISSING OPENCLAW_HOSTINGER_USER"
+          [ -z "${{ secrets.OPENCLAW_HOSTINGER_GATEWAY_TOKEN }}" ]  && MISSING="$MISSING OPENCLAW_HOSTINGER_GATEWAY_TOKEN"
+          [ -z "${{ secrets.NEUS_AI_OLLAMA_API_KEY }}" ]            && MISSING="$MISSING NEUS_AI_OLLAMA_API_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing secrets:$MISSING — add in neus/claw Settings → Secrets → Actions"
+            exit 1
+          fi
+
+      - name: Copy deploy files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OPENCLAW_HOSTINGER_HOST }}
+          username: ${{ secrets.OPENCLAW_HOSTINGER_USER }}
+          key: ${{ secrets.OPENCLAW_HOSTINGER_SSH_KEY }}
+          source: ".deploy/hostinger/*"
+          target: "/root/openclaw-deploy"
+          strip_components: 2
+
+      - name: Deploy to Hostinger VPS
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          OLLAMA_API_KEY: ${{ secrets.NEUS_AI_OLLAMA_API_KEY }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_HOSTINGER_GATEWAY_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
+          ACR: ${{ env.ACR_LOGIN_SERVER }}
+          IMAGE_REPO: ${{ env.IMAGE_REPO }}
+          ACR_USER: ${{ secrets.NEUSCAESTAGING_REGISTRY_USERNAME }}
+          ACR_PASS: ${{ secrets.NEUSCAESTAGING_REGISTRY_PASSWORD }}
+        with:
+          host: ${{ secrets.OPENCLAW_HOSTINGER_HOST }}
+          username: ${{ secrets.OPENCLAW_HOSTINGER_USER }}
+          key: ${{ secrets.OPENCLAW_HOSTINGER_SSH_KEY }}
+          envs: OLLAMA_API_KEY,OPENCLAW_GATEWAY_TOKEN,IMAGE_TAG,ACR,IMAGE_REPO,ACR_USER,ACR_PASS
+          script: |
+            set -e
+            DEPLOY_DIR="/root/openclaw-deploy"
+            CONFIG_DIR="$DEPLOY_DIR/data/config"
+            WORKSPACE_DIR="$DEPLOY_DIR/data/workspace"
+            mkdir -p "$CONFIG_DIR" "$WORKSPACE_DIR"
+
+            # Bootstrap config on first deploy only
+            if [ ! -f "$CONFIG_DIR/openclaw.json5" ]; then
+              sed "s|__GATEWAY_TOKEN__|$OPENCLAW_GATEWAY_TOKEN|g" \
+                "$DEPLOY_DIR/config-template.json5" > "$CONFIG_DIR/openclaw.json5"
+              echo "Bootstrap: openclaw.json5 created"
+            fi
+
+            # Login to ACR
+            echo "$ACR_PASS" | docker login "$ACR" -u "$ACR_USER" --password-stdin
+
+            # Write .env — injected every deploy, always current
+            {
+              echo "OLLAMA_API_KEY=$OLLAMA_API_KEY"
+              echo "OPENCLAW_GATEWAY_TOKEN=$OPENCLAW_GATEWAY_TOKEN"
+              echo "OPENCLAW_CONFIG_DIR=$CONFIG_DIR"
+              echo "OPENCLAW_WORKSPACE_DIR=$WORKSPACE_DIR"
+              echo "OPENCLAW_IMAGE=$ACR/$IMAGE_REPO:$IMAGE_TAG"
+            } > "$DEPLOY_DIR/.env"
+
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" --env-file "$DEPLOY_DIR/.env" pull
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" --env-file "$DEPLOY_DIR/.env" up -d
+            docker compose -f "$DEPLOY_DIR/docker-compose.yml" --env-file "$DEPLOY_DIR/.env" ps
+
+      - name: Validate claw.neus.network
+        run: |
+          sleep 5
+          CODE=$(curl -sI -o /dev/null -w "%{http_code}" --max-time 15 "https://claw.neus.network/" 2>/dev/null || echo "000")
+          if [ "$CODE" = "200" ] || [ "$CODE" = "301" ] || [ "$CODE" = "302" ]; then
+            echo "claw.neus.network OK ($CODE)"
+            echo "✅ claw.neus.network returned $CODE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::warning::claw.neus.network returned $CODE"
+            echo "⚠️ claw.neus.network returned $CODE — check Cloudflare tunnel (claw.neus.network → localhost:60185)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Deploy summary
+        if: success()
+        run: |
+          echo "## OpenClaw deployed to Hostinger" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_REPO }}:${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Host  | ${{ secrets.OPENCLAW_HOSTINGER_HOST }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL   | https://claw.neus.network |" >> $GITHUB_STEP_SUMMARY
+          echo "| Model | neus-ai/qwen3-coder-next via https://ai.neus.network/v1 |" >> $GITHUB_STEP_SUMMARY

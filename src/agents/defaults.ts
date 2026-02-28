@@ -1,0 +1,5 @@
+// Defaults for agent metadata when upstream does not supply them.
+export const DEFAULT_PROVIDER = "google";
+export const DEFAULT_MODEL = "gemini-2.5-flash";
+// Conservative fallback used when model metadata is unavailable.
+export const DEFAULT_CONTEXT_TOKENS = 200_000;

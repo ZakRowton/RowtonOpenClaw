@@ -1,0 +1,47 @@
+# OpenClaw — Hostinger VPS (production)
+#
+# cloudflared tunnel: claw.neus.network → localhost:60185 → openclaw-gateway:18789
+# All env vars injected by deploy workflow (no manual setup required).
+
+services:
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-neusregistry.azurecr.io/openclaw:latest}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+    ports:
+      - "60185:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "openclaw.mjs",
+        "gateway",
+        "--allow-unconfigured",
+        "--bind",
+        "lan",
+        "--port",
+        "18789",
+      ]
+
+  cloudflared:
+    image: wisdomsky/cloudflared-web:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - cloudflared-config:/config
+    depends_on:
+      - openclaw-gateway
+
+volumes:
+  cloudflared-config:
