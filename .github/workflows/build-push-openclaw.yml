@@ -42,6 +42,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check build secrets
+        run: |
+          MISSING=""
+          [ -z "${{ secrets.NEUSCAESTAGING_REGISTRY_USERNAME }}" ] && MISSING="$MISSING NEUSCAESTAGING_REGISTRY_USERNAME"
+          [ -z "${{ secrets.NEUSCAESTAGING_REGISTRY_PASSWORD }}" ] && MISSING="$MISSING NEUSCAESTAGING_REGISTRY_PASSWORD"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing secrets:$MISSING — add in Settings → Secrets → Actions (ACR creds from neus/protocol)"
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
