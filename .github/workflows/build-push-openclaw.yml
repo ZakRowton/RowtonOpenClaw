@@ -3,10 +3,12 @@
 # Push to main/master → build image → push to neusregistry.azurecr.io/openclaw → deploy to Hostinger.
 # One-click: no manual steps after push.
 #
-# Secrets required (neus/claw repo → Settings → Secrets):
-#   Build+Push: NEUSCAESTAGING_REGISTRY_USERNAME, NEUSCAESTAGING_REGISTRY_PASSWORD
-#   Deploy:     OPENCLAW_HOSTINGER_SSH_KEY, OPENCLAW_HOSTINGER_HOST, OPENCLAW_HOSTINGER_USER,
-#               OPENCLAW_HOSTINGER_GATEWAY_TOKEN, NEUS_AI_OLLAMA_API_KEY
+# Secrets required (claw repo → Settings → Secrets → Actions):
+#   Build:     NEUSCAESTAGING_AZURE_CLIENT_ID, NEUSCAESTAGING_AZURE_TENANT_ID, NEUSCAESTAGING_AZURE_SUBSCRIPTION_ID
+#             (OIDC — same as neus-nut; SP must have AcrPush on neusregistry)
+#   Deploy:   NEUSCAESTAGING_REGISTRY_USERNAME, NEUSCAESTAGING_REGISTRY_PASSWORD (VPS docker pull)
+#             OPENCLAW_HOSTINGER_SSH_KEY, OPENCLAW_HOSTINGER_HOST, OPENCLAW_HOSTINGER_USER,
+#             OPENCLAW_HOSTINGER_GATEWAY_TOKEN, NEUS_AI_OLLAMA_API_KEY
 
 name: Build, Push & Deploy OpenClaw
 
@@ -26,6 +28,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  ACR_NAME: neusregistry
   ACR_LOGIN_SERVER: neusregistry.azurecr.io
   IMAGE_REPO: openclaw
 
@@ -34,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
+      id-token: write
       contents: read
     outputs:
       image_tag: ${{ steps.meta.outputs.sha_tag }}
@@ -42,25 +46,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check build secrets
+      - name: Check build secrets (Azure OIDC for ACR)
         run: |
           MISSING=""
-          [ -z "${{ secrets.NEUSCAESTAGING_REGISTRY_USERNAME }}" ] && MISSING="$MISSING NEUSCAESTAGING_REGISTRY_USERNAME"
-          [ -z "${{ secrets.NEUSCAESTAGING_REGISTRY_PASSWORD }}" ] && MISSING="$MISSING NEUSCAESTAGING_REGISTRY_PASSWORD"
+          [ -z "${{ secrets.NEUSCAESTAGING_AZURE_CLIENT_ID }}" ] && MISSING="$MISSING NEUSCAESTAGING_AZURE_CLIENT_ID"
+          [ -z "${{ secrets.NEUSCAESTAGING_AZURE_TENANT_ID }}" ] && MISSING="$MISSING NEUSCAESTAGING_AZURE_TENANT_ID"
+          [ -z "${{ secrets.NEUSCAESTAGING_AZURE_SUBSCRIPTION_ID }}" ] && MISSING="$MISSING NEUSCAESTAGING_AZURE_SUBSCRIPTION_ID"
           if [ -n "$MISSING" ]; then
-            echo "::error::Missing secrets:$MISSING — add in Settings → Secrets → Actions (ACR creds from neus/protocol)"
+            echo "::error::Missing secrets:$MISSING — add in Settings → Secrets → Actions"
+            echo "::error::SP must have AcrPush on neusregistry (same creds as neus-nut deploy)"
             exit 1
           fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to ACR
-        uses: docker/login-action@v3
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
         with:
-          registry: ${{ env.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.NEUSCAESTAGING_REGISTRY_USERNAME }}
-          password: ${{ secrets.NEUSCAESTAGING_REGISTRY_PASSWORD }}
+          client-id:       ${{ secrets.NEUSCAESTAGING_AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.NEUSCAESTAGING_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.NEUSCAESTAGING_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login -n ${{ env.ACR_NAME }}
 
       - name: Set image tags
         id: meta
@@ -108,9 +117,11 @@ jobs:
           [ -z "${{ secrets.OPENCLAW_HOSTINGER_HOST }}" ]           && MISSING="$MISSING OPENCLAW_HOSTINGER_HOST"
           [ -z "${{ secrets.OPENCLAW_HOSTINGER_USER }}" ]           && MISSING="$MISSING OPENCLAW_HOSTINGER_USER"
           [ -z "${{ secrets.OPENCLAW_HOSTINGER_GATEWAY_TOKEN }}" ]  && MISSING="$MISSING OPENCLAW_HOSTINGER_GATEWAY_TOKEN"
-          [ -z "${{ secrets.NEUS_AI_OLLAMA_API_KEY }}" ]            && MISSING="$MISSING NEUS_AI_OLLAMA_API_KEY"
+          [ -z "${{ secrets.NEUS_AI_OLLAMA_API_KEY }}" ]           && MISSING="$MISSING NEUS_AI_OLLAMA_API_KEY"
+          [ -z "${{ secrets.NEUSCAESTAGING_REGISTRY_USERNAME }}" ] && MISSING="$MISSING NEUSCAESTAGING_REGISTRY_USERNAME"
+          [ -z "${{ secrets.NEUSCAESTAGING_REGISTRY_PASSWORD }}" ] && MISSING="$MISSING NEUSCAESTAGING_REGISTRY_PASSWORD"
           if [ -n "$MISSING" ]; then
-            echo "::error::Missing secrets:$MISSING — add in neus/claw Settings → Secrets → Actions"
+            echo "::error::Missing secrets:$MISSING — add in claw Settings → Secrets → Actions"
             exit 1
           fi
 
