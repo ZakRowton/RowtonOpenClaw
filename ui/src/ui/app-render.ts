@@ -2,7 +2,6 @@ import { html, nothing } from "lit";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.ts";
 import { t } from "../i18n/index.ts";
 import { refreshChatAvatar } from "./app-chat.ts";
-import { renderUsageTab } from "./app-render-usage-tab.ts";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers.ts";
 import type { AppViewState } from "./app-view-state.ts";
 import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
@@ -37,7 +36,6 @@ import {
   updateCronJobsFilter,
   updateCronRunsFilter,
 } from "./controllers/cron.ts";
-import { loadDebug, callDebugMethod } from "./controllers/debug.ts";
 import {
   approveDevicePairing,
   loadDevices,
@@ -56,6 +54,8 @@ import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { deleteSessionAndRefresh, loadSessions, patchSession } from "./controllers/sessions.ts";
 import {
+  closeSkillFileView,
+  getSkillFile,
   installSkill,
   loadSkills,
   saveSkillApiKey,
@@ -66,18 +66,13 @@ import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "./external-link.ts";
 import { icons } from "./icons.ts";
 import { normalizeBasePath, TAB_GROUPS, subtitleForTab, titleForTab } from "./navigation.ts";
 import { renderAgents } from "./views/agents.ts";
-import { renderChannels } from "./views/channels.ts";
 import { renderChat } from "./views/chat.ts";
-import { renderConfig } from "./views/config.ts";
+import { renderConfigMdFiles } from "./views/config-md-files.ts";
 import { renderCron } from "./views/cron.ts";
-import { renderDebug } from "./views/debug.ts";
 import { renderExecApprovalPrompt } from "./views/exec-approval.ts";
 import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.ts";
-import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
-import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
-import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
 
 const AVATAR_DATA_RE = /^data:/i;
@@ -155,10 +150,11 @@ export function renderApp(state: AppViewState) {
   const chatFocus = isChat && (state.settings.chatFocusMode || state.onboarding);
   const showThinking = state.onboarding ? false : state.settings.chatShowThinking;
   const assistantAvatarUrl = resolveAssistantAvatarUrl(state);
-  const chatAvatarUrl = state.chatAvatarUrl ?? assistantAvatarUrl ?? null;
   const configValue =
     state.configForm ?? (state.configSnapshot?.config as Record<string, unknown> | null);
   const basePath = normalizeBasePath(state.basePath ?? "");
+  const defaultLogoUrl = basePath ? `${basePath}/favicon.ico` : "/favicon.ico";
+  const chatAvatarUrl = state.chatAvatarUrl ?? assistantAvatarUrl ?? defaultLogoUrl;
   const resolvedAgentId =
     state.agentsSelectedId ??
     state.agentsList?.defaultId ??
@@ -316,8 +312,8 @@ export function renderApp(state: AppViewState) {
         }
         <section class="content-header">
           <div>
-            ${state.tab === "usage" ? nothing : html`<div class="page-title">${titleForTab(state.tab)}</div>`}
-            ${state.tab === "usage" ? nothing : html`<div class="page-sub">${subtitleForTab(state.tab)}</div>`}
+            <div class="page-title">${titleForTab(state.tab)}</div>
+            <div class="page-sub">${subtitleForTab(state.tab)}</div>
           </div>
           <div class="page-meta">
             ${state.lastError ? html`<div class="pill danger">${state.lastError}</div>` : nothing}
@@ -357,83 +353,6 @@ export function renderApp(state: AppViewState) {
               })
             : nothing
         }
-
-        ${
-          state.tab === "channels"
-            ? renderChannels({
-                connected: state.connected,
-                loading: state.channelsLoading,
-                snapshot: state.channelsSnapshot,
-                lastError: state.channelsError,
-                lastSuccessAt: state.channelsLastSuccess,
-                whatsappMessage: state.whatsappLoginMessage,
-                whatsappQrDataUrl: state.whatsappLoginQrDataUrl,
-                whatsappConnected: state.whatsappLoginConnected,
-                whatsappBusy: state.whatsappBusy,
-                configSchema: state.configSchema,
-                configSchemaLoading: state.configSchemaLoading,
-                configForm: state.configForm,
-                configUiHints: state.configUiHints,
-                configSaving: state.configSaving,
-                configFormDirty: state.configFormDirty,
-                nostrProfileFormState: state.nostrProfileFormState,
-                nostrProfileAccountId: state.nostrProfileAccountId,
-                onRefresh: (probe) => loadChannels(state, probe),
-                onWhatsAppStart: (force) => state.handleWhatsAppStart(force),
-                onWhatsAppWait: () => state.handleWhatsAppWait(),
-                onWhatsAppLogout: () => state.handleWhatsAppLogout(),
-                onConfigPatch: (path, value) => updateConfigFormValue(state, path, value),
-                onConfigSave: () => state.handleChannelConfigSave(),
-                onConfigReload: () => state.handleChannelConfigReload(),
-                onNostrProfileEdit: (accountId, profile) =>
-                  state.handleNostrProfileEdit(accountId, profile),
-                onNostrProfileCancel: () => state.handleNostrProfileCancel(),
-                onNostrProfileFieldChange: (field, value) =>
-                  state.handleNostrProfileFieldChange(field, value),
-                onNostrProfileSave: () => state.handleNostrProfileSave(),
-                onNostrProfileImport: () => state.handleNostrProfileImport(),
-                onNostrProfileToggleAdvanced: () => state.handleNostrProfileToggleAdvanced(),
-              })
-            : nothing
-        }
-
-        ${
-          state.tab === "instances"
-            ? renderInstances({
-                loading: state.presenceLoading,
-                entries: state.presenceEntries,
-                lastError: state.presenceError,
-                statusMessage: state.presenceStatus,
-                onRefresh: () => loadPresence(state),
-              })
-            : nothing
-        }
-
-        ${
-          state.tab === "sessions"
-            ? renderSessions({
-                loading: state.sessionsLoading,
-                result: state.sessionsResult,
-                error: state.sessionsError,
-                activeMinutes: state.sessionsFilterActive,
-                limit: state.sessionsFilterLimit,
-                includeGlobal: state.sessionsIncludeGlobal,
-                includeUnknown: state.sessionsIncludeUnknown,
-                basePath: state.basePath,
-                onFiltersChange: (next) => {
-                  state.sessionsFilterActive = next.activeMinutes;
-                  state.sessionsFilterLimit = next.limit;
-                  state.sessionsIncludeGlobal = next.includeGlobal;
-                  state.sessionsIncludeUnknown = next.includeUnknown;
-                },
-                onRefresh: () => loadSessions(state),
-                onPatch: (key, patch) => patchSession(state, key, patch),
-                onDelete: (key) => deleteSessionAndRefresh(state, key),
-              })
-            : nothing
-        }
-
-        ${renderUsageTab(state)}
 
         ${
           state.tab === "cron"
@@ -881,6 +800,7 @@ export function renderApp(state: AppViewState) {
                 edits: state.skillEdits,
                 messages: state.skillMessages,
                 busyKey: state.skillsBusyKey,
+                skillFileView: state.skillFileView,
                 onFilterChange: (next) => (state.skillsFilter = next),
                 onRefresh: () => loadSkills(state, { clearMessages: true }),
                 onToggle: (key, enabled) => updateSkillEnabled(state, key, enabled),
@@ -888,85 +808,8 @@ export function renderApp(state: AppViewState) {
                 onSaveKey: (key) => saveSkillApiKey(state, key),
                 onInstall: (skillKey, name, installId) =>
                   installSkill(state, skillKey, name, installId),
-              })
-            : nothing
-        }
-
-        ${
-          state.tab === "nodes"
-            ? renderNodes({
-                loading: state.nodesLoading,
-                nodes: state.nodes,
-                devicesLoading: state.devicesLoading,
-                devicesError: state.devicesError,
-                devicesList: state.devicesList,
-                configForm:
-                  state.configForm ??
-                  (state.configSnapshot?.config as Record<string, unknown> | null),
-                configLoading: state.configLoading,
-                configSaving: state.configSaving,
-                configDirty: state.configFormDirty,
-                configFormMode: state.configFormMode,
-                execApprovalsLoading: state.execApprovalsLoading,
-                execApprovalsSaving: state.execApprovalsSaving,
-                execApprovalsDirty: state.execApprovalsDirty,
-                execApprovalsSnapshot: state.execApprovalsSnapshot,
-                execApprovalsForm: state.execApprovalsForm,
-                execApprovalsSelectedAgent: state.execApprovalsSelectedAgent,
-                execApprovalsTarget: state.execApprovalsTarget,
-                execApprovalsTargetNodeId: state.execApprovalsTargetNodeId,
-                onRefresh: () => loadNodes(state),
-                onDevicesRefresh: () => loadDevices(state),
-                onDeviceApprove: (requestId) => approveDevicePairing(state, requestId),
-                onDeviceReject: (requestId) => rejectDevicePairing(state, requestId),
-                onDeviceRotate: (deviceId, role, scopes) =>
-                  rotateDeviceToken(state, { deviceId, role, scopes }),
-                onDeviceRevoke: (deviceId, role) => revokeDeviceToken(state, { deviceId, role }),
-                onLoadConfig: () => loadConfig(state),
-                onLoadExecApprovals: () => {
-                  const target =
-                    state.execApprovalsTarget === "node" && state.execApprovalsTargetNodeId
-                      ? { kind: "node" as const, nodeId: state.execApprovalsTargetNodeId }
-                      : { kind: "gateway" as const };
-                  return loadExecApprovals(state, target);
-                },
-                onBindDefault: (nodeId) => {
-                  if (nodeId) {
-                    updateConfigFormValue(state, ["tools", "exec", "node"], nodeId);
-                  } else {
-                    removeConfigFormValue(state, ["tools", "exec", "node"]);
-                  }
-                },
-                onBindAgent: (agentIndex, nodeId) => {
-                  const basePath = ["agents", "list", agentIndex, "tools", "exec", "node"];
-                  if (nodeId) {
-                    updateConfigFormValue(state, basePath, nodeId);
-                  } else {
-                    removeConfigFormValue(state, basePath);
-                  }
-                },
-                onSaveBindings: () => saveConfig(state),
-                onExecApprovalsTargetChange: (kind, nodeId) => {
-                  state.execApprovalsTarget = kind;
-                  state.execApprovalsTargetNodeId = nodeId;
-                  state.execApprovalsSnapshot = null;
-                  state.execApprovalsForm = null;
-                  state.execApprovalsDirty = false;
-                  state.execApprovalsSelectedAgent = null;
-                },
-                onExecApprovalsSelectAgent: (agentId) => {
-                  state.execApprovalsSelectedAgent = agentId;
-                },
-                onExecApprovalsPatch: (path, value) =>
-                  updateExecApprovalsFormValue(state, path, value),
-                onExecApprovalsRemove: (path) => removeExecApprovalsFormValue(state, path),
-                onSaveExecApprovals: () => {
-                  const target =
-                    state.execApprovalsTarget === "node" && state.execApprovalsTargetNodeId
-                      ? { kind: "node" as const, nodeId: state.execApprovalsTargetNodeId }
-                      : { kind: "gateway" as const };
-                  return saveExecApprovals(state, target);
-                },
+                onViewFile: (skillKey, name) => getSkillFile(state, skillKey, name),
+                onCloseFileView: () => closeSkillFileView(state),
               })
             : nothing
         }
@@ -1053,61 +896,40 @@ export function renderApp(state: AppViewState) {
 
         ${
           state.tab === "config"
-            ? renderConfig({
-                raw: state.configRaw,
-                originalRaw: state.configRawOriginal,
-                valid: state.configValid,
-                issues: state.configIssues,
-                loading: state.configLoading,
-                saving: state.configSaving,
-                applying: state.configApplying,
-                updating: state.updateRunning,
-                connected: state.connected,
-                schema: state.configSchema,
-                schemaLoading: state.configSchemaLoading,
-                uiHints: state.configUiHints,
-                formMode: state.configFormMode,
-                formValue: state.configForm,
-                originalValue: state.configFormOriginal,
-                searchQuery: state.configSearchQuery,
-                activeSection: state.configActiveSection,
-                activeSubsection: state.configActiveSubsection,
-                onRawChange: (next) => {
-                  state.configRaw = next;
+            ? renderConfigMdFiles({
+                defaultAgentId:
+                  state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? null,
+                agentFilesList: state.agentFilesList,
+                agentFilesLoading: state.agentFilesLoading,
+                agentFilesError: state.agentFilesError,
+                agentFileActive: state.agentFileActive,
+                agentFileContents: state.agentFileContents,
+                agentFileDrafts: state.agentFileDrafts,
+                agentFileSaving: state.agentFileSaving,
+                onLoadFiles: (agentId) => loadAgentFiles(state, agentId),
+                onSelectFile: (name) => {
+                  state.agentFileActive = name;
+                  const agentId =
+                    state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? null;
+                  if (agentId) {
+                    void loadAgentFileContent(state, agentId, name);
+                  }
                 },
-                onFormModeChange: (mode) => (state.configFormMode = mode),
-                onFormPatch: (path, value) => updateConfigFormValue(state, path, value),
-                onSearchChange: (query) => (state.configSearchQuery = query),
-                onSectionChange: (section) => {
-                  state.configActiveSection = section;
-                  state.configActiveSubsection = null;
+                onFileDraftChange: (name, content) => {
+                  state.agentFileDrafts = { ...state.agentFileDrafts, [name]: content };
                 },
-                onSubsectionChange: (section) => (state.configActiveSubsection = section),
-                onReload: () => loadConfig(state),
-                onSave: () => saveConfig(state),
-                onApply: () => applyConfig(state),
-                onUpdate: () => runUpdate(state),
-              })
-            : nothing
-        }
-
-        ${
-          state.tab === "debug"
-            ? renderDebug({
-                loading: state.debugLoading,
-                status: state.debugStatus,
-                health: state.debugHealth,
-                models: state.debugModels,
-                heartbeat: state.debugHeartbeat,
-                eventLog: state.eventLog,
-                callMethod: state.debugCallMethod,
-                callParams: state.debugCallParams,
-                callResult: state.debugCallResult,
-                callError: state.debugCallError,
-                onCallMethodChange: (next) => (state.debugCallMethod = next),
-                onCallParamsChange: (next) => (state.debugCallParams = next),
-                onRefresh: () => loadDebug(state),
-                onCall: () => callDebugMethod(state),
+                onFileReset: (name) => {
+                  const base = state.agentFileContents[name] ?? "";
+                  state.agentFileDrafts = { ...state.agentFileDrafts, [name]: base };
+                },
+                onFileSave: (name) => {
+                  const agentId =
+                    state.agentsList?.defaultId ?? state.agentsList?.agents?.[0]?.id ?? null;
+                  const content = state.agentFileDrafts[name] ?? "";
+                  if (agentId) {
+                    void saveAgentFile(state, agentId, name, content);
+                  }
+                },
               })
             : nothing
         }

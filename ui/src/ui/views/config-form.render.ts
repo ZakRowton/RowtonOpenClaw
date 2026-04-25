@@ -228,6 +228,11 @@ const sectionIcons = {
       <path d="m19.07 10.93-4.24 4.24"></path>
     </svg>
   `,
+  neus: html`
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+    </svg>
+  `,
   default: html`
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -272,6 +277,10 @@ export const SECTION_META: Record<string, { label: string; description: string }
   canvasHost: { label: "Canvas Host", description: "Canvas rendering and display" },
   talk: { label: "Talk", description: "Voice and speech settings" },
   plugins: { label: "Plugins", description: "Plugin management and extensions" },
+  neus: {
+    label: "Included Proofs",
+    description: "NEUS proof IDs to include (uses NEUS API for status)",
+  },
 };
 
 function getSectionIcon(key: string) {
@@ -330,7 +339,30 @@ export function renderConfigForm(props: ConfigFormProps) {
     `;
   }
   const unsupported = new Set(props.unsupportedPaths ?? []);
-  const properties = schema.properties;
+  // Ensure "neus" (Included Proofs) is always available for the form even if schema is from an older gateway
+  const properties: Record<string, JsonSchema> = {
+    ...schema.properties,
+    ...(schema.properties && !("neus" in schema.properties)
+      ? {
+          neus: {
+            type: "object",
+            title: "Included Proofs",
+            properties: {
+              includedProofIds: {
+                type: "array",
+                items: { type: "string" },
+                description: "NEUS proof IDs to include",
+              },
+              apiBaseUrl: {
+                type: "string",
+                format: "uri",
+                description: "NEUS API base URL for proof status",
+              },
+            },
+          },
+        }
+      : {}),
+  };
   const searchQuery = props.searchQuery ?? "";
   const searchCriteria = parseConfigSearchQuery(searchQuery);
   const activeSection = props.activeSection;

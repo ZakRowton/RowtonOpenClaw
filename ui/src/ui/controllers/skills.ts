@@ -155,3 +155,67 @@ export async function installSkill(
     state.skillsBusyKey = null;
   }
 }
+
+export type SkillFileView = {
+  skillKey: string | null;
+  name: string;
+  path: string | null;
+  content: string | null;
+  loading: boolean;
+  error: string | null;
+};
+
+export async function getSkillFile(
+  state: SkillsState & { skillFileView: SkillFileView },
+  skillKey: string,
+  name: string,
+) {
+  if (!state.client || !state.connected) {
+    return;
+  }
+  state.skillFileView = {
+    skillKey,
+    name,
+    path: null,
+    content: null,
+    loading: true,
+    error: null,
+  };
+  try {
+    const res = await state.client.request<{
+      skillKey: string;
+      path: string;
+      content: string;
+    }>("skills.file.get", { skillKey });
+    state.skillFileView = {
+      skillKey,
+      name,
+      path: res.path ?? null,
+      content: res.content ?? null,
+      loading: false,
+      error: null,
+    };
+  } catch (err) {
+    state.skillFileView = {
+      skillKey,
+      name,
+      path: null,
+      content: null,
+      loading: false,
+      error: getErrorMessage(err),
+    };
+  }
+}
+
+export function closeSkillFileView(
+  state: { skillFileView: SkillFileView },
+) {
+  state.skillFileView = {
+    skillKey: null,
+    name: "",
+    path: null,
+    content: null,
+    loading: false,
+    error: null,
+  };
+}

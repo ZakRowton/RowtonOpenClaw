@@ -1,7 +1,7 @@
 import type { OpenClawConfig } from "../config/config.ts";
 
-export const CONTEXT_WINDOW_HARD_MIN_TOKENS = 16_000;
-export const CONTEXT_WINDOW_WARN_BELOW_TOKENS = 32_000;
+export const CONTEXT_WINDOW_HARD_MIN_TOKENS = 4_096;
+export const CONTEXT_WINDOW_WARN_BELOW_TOKENS = 8_000;
 
 export type ContextWindowSource = "model" | "modelsConfig" | "agentContextTokens" | "default";
 

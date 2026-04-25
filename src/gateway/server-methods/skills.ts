@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   listAgentIds,
   resolveAgentWorkspaceDir,
@@ -17,6 +20,7 @@ import {
   errorShape,
   formatValidationErrors,
   validateSkillsBinsParams,
+  validateSkillsFileGetParams,
   validateSkillsInstallParams,
   validateSkillsStatusParams,
   validateSkillsUpdateParams,
@@ -87,6 +91,66 @@ export const skillsHandlers: GatewayRequestHandlers = {
       eligibility: { remote: getRemoteSkillEligibility() },
     });
     respond(true, report, undefined);
+  },
+  "skills.file.get": async ({ params, respond }) => {
+    if (!validateSkillsFileGetParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid skills.file.get params: ${formatValidationErrors(
+            validateSkillsFileGetParams.errors,
+          )}`,
+        ),
+      );
+      return;
+    }
+    const p = params as { skillKey: string; agentId?: string };
+    const cfg = loadConfig();
+    const agentIdRaw = typeof p.agentId === "string" ? p.agentId.trim() : "";
+    const agentId = agentIdRaw ? normalizeAgentId(agentIdRaw) : resolveDefaultAgentId(cfg);
+    if (agentIdRaw) {
+      const knownAgents = listAgentIds(cfg);
+      if (!knownAgents.includes(agentId)) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `unknown agent id "${agentIdRaw}"`),
+        );
+        return;
+      }
+    }
+    const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+    const report = buildWorkspaceSkillStatus(workspaceDir, {
+      config: cfg,
+      eligibility: { remote: getRemoteSkillEligibility() },
+    });
+    const skill = report.skills.find((s) => s.skillKey === p.skillKey);
+    if (!skill) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `skill not found: ${p.skillKey}`),
+      );
+      return;
+    }
+    let filePath = skill.filePath;
+    if (filePath.startsWith("~/") || filePath === "~") {
+      const home = os.homedir();
+      filePath = home ? path.join(home, filePath.slice(1)) : filePath;
+    }
+    try {
+      const content = await fs.readFile(filePath, "utf-8");
+      respond(true, { skillKey: p.skillKey, path: skill.filePath, content }, undefined);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.UNAVAILABLE, `failed to read skill file: ${message}`),
+      );
+    }
   },
   "skills.bins": ({ params, respond }) => {
     if (!validateSkillsBinsParams(params)) {

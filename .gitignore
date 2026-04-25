@@ -1,8 +1,6 @@
 node_modules
 **/node_modules/
 .env
-.deploy/hostinger/data/
-.deploy/hostinger/.env
 docker-compose.extra.yml
 dist
 pnpm-lock.yaml
@@ -122,3 +120,8 @@ dist/protocol.schema.json
 
 # Synthing
 **/.stfolder/
+
+# Local NEUS/OpenClaw runtime configs (may contain tokens)
+openclaw.local-*.json5
+openclaw.local-*.json5.bak
+openclaw.local-*.json5.bak.*

@@ -1,0 +1,25 @@
+# OpenClaw — put nginx in front of the gateway to fix 507 "exceeded request buffer limit"
+# Use when you see 507 locally or in Docker. Traffic: client/tunnel → nginx:60185 → gateway:18789
+#
+# Run with:
+#   docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+#
+# Then use port 60185 (or the port nginx exposes); cloudflared/tunnel should point at nginx.
+
+services:
+  openclaw-gateway:
+    ports:
+      # No 60185 here — nginx owns it. 18789 is internal for nginx only.
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "60185:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - openclaw-gateway
+    networks:
+      - default

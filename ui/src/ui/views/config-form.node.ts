@@ -472,8 +472,11 @@ export function renderNode(params: {
     return renderSelect({ ...params, options, value: value ?? schema.default });
   }
 
-  // Object type - collapsible section
+  // Object type - collapsible section (custom widget for neus "Included Proofs")
   if (type === "object") {
+    if (path.length === 1 && path[0] === "neus") {
+      return renderNeusIncludedProofs(params);
+    }
     return renderObject(params);
   }
 
@@ -698,6 +701,117 @@ function renderSelect(params: {
         `,
         )}
       </select>
+    </div>
+  `;
+}
+
+/** Custom widget for neus.includedProofIds + apiBaseUrl; uses NEUS API for proof status. */
+function renderNeusIncludedProofs(params: {
+  schema: JsonSchema;
+  value: unknown;
+  path: Array<string | number>;
+  hints: ConfigUiHints;
+  unsupported: Set<string>;
+  disabled: boolean;
+  showLabel?: boolean;
+  searchCriteria?: ConfigSearchCriteria;
+  onPatch: (path: Array<string | number>, value: unknown) => void;
+}): TemplateResult {
+  const { value, path, disabled, onPatch } = params;
+  const neus = (value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {}) as { includedProofIds?: string[]; apiBaseUrl?: string };
+  const ids = Array.isArray(neus.includedProofIds) ? neus.includedProofIds : [];
+  const apiBase = typeof neus.apiBaseUrl === "string" ? neus.apiBaseUrl.trim() : "";
+
+  return html`
+    <div class="cfg-neus-proofs">
+      <div class="cfg-field">
+        <label class="cfg-field__label">NEUS API base URL</label>
+        <div class="cfg-field__help">Optional. Set to fetch proof status from NEUS API (e.g. https://app.neus.network).</div>
+        <div class="cfg-input-wrap">
+          <input
+            type="url"
+            class="cfg-input"
+            placeholder="https://app.neus.network"
+            .value=${apiBase}
+            ?disabled=${disabled}
+            @input=${(e: Event) => onPatch([...path, "apiBaseUrl"], (e.target as HTMLInputElement).value)}
+          />
+        </div>
+      </div>
+      <div class="cfg-array">
+        <div class="cfg-array__header">
+          <span class="cfg-array__label">Proof IDs</span>
+          <span class="cfg-array__count">${ids.length} proof${ids.length !== 1 ? "s" : ""}</span>
+          <button
+            type="button"
+            class="cfg-array__add"
+            ?disabled=${disabled}
+            @click=${() => onPatch([...path, "includedProofIds"], [...ids, ""])}
+          >
+            <span class="cfg-array__add-icon">${icons.plus}</span>
+            Add proof ID
+          </button>
+        </div>
+        ${
+          ids.length === 0
+            ? html`<div class="cfg-array__empty">No proof IDs. Click "Add proof ID" to add NEUS proof IDs.</div>`
+            : html`
+          <div class="cfg-array__items">
+            ${ids.map(
+              (id, idx) => html`
+              <div class="cfg-array__item">
+                <div class="cfg-array__item-header">
+                  <span class="cfg-array__item-index">#${idx + 1}</span>
+                  <button
+                    type="button"
+                    class="cfg-array__item-remove"
+                    title="Remove"
+                    ?disabled=${disabled}
+                    @click=${() => {
+                      const next = ids.filter((_, i) => i !== idx);
+                      onPatch([...path, "includedProofIds"], next);
+                    }}
+                  >
+                    ${icons.trash}
+                  </button>
+                </div>
+                <div class="cfg-array__item-content">
+                  <div class="cfg-input-wrap">
+                    <input
+                      type="text"
+                      class="cfg-input"
+                      placeholder="Proof ID (e.g. 0x...)"
+                      .value=${id}
+                      ?disabled=${disabled}
+                      @input=${(e: Event) => {
+                        const next = [...ids];
+                        next[idx] = (e.target as HTMLInputElement).value;
+                        onPatch([...path, "includedProofIds"], next);
+                      }}
+                    />
+                  </div>
+                  ${
+                    apiBase && id
+                      ? html`
+                    <a
+                      class="cfg-neus-proofs__link"
+                      href=${`${apiBase.replace(/\/$/, "")}/proof/${encodeURIComponent(id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >View on NEUS</a>
+                  `
+                      : nothing
+                  }
+                </div>
+              </div>
+            `,
+            )}
+          </div>
+        `
+        }
+      </div>
     </div>
   `;
 }

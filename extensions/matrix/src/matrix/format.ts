@@ -1,4 +1,4 @@
-import MarkdownIt from "markdown-it/index.js";
+import MarkdownIt from "markdown-it";
 
 const md = new MarkdownIt({
   html: false,

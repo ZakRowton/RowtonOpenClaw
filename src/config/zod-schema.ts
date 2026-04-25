@@ -742,6 +742,13 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    neus: z
+      .object({
+        includedProofIds: z.array(z.string()).optional(),
+        apiBaseUrl: z.string().url().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((cfg, ctx) => {

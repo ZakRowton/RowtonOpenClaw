@@ -7,6 +7,7 @@ import {
 } from "./app-polling.ts";
 import { scheduleChatScroll, scheduleLogsScroll } from "./app-scroll.ts";
 import type { OpenClawApp } from "./app.ts";
+import { loadAgentFiles } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
@@ -239,8 +240,12 @@ export async function refreshActiveTab(host: SettingsHost) {
     );
   }
   if (host.tab === "config") {
-    await loadConfigSchema(host as unknown as OpenClawApp);
-    await loadConfig(host as unknown as OpenClawApp);
+    await loadAgents(host as unknown as OpenClawApp);
+    const defaultAgentId =
+      host.agentsList?.defaultId ?? host.agentsList?.agents?.[0]?.id ?? null;
+    if (defaultAgentId) {
+      await loadAgentFiles(host as unknown as OpenClawApp, defaultAgentId);
+    }
   }
   if (host.tab === "debug") {
     await loadDebug(host as unknown as OpenClawApp);

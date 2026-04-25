@@ -5,18 +5,32 @@ import { stripThinkingTags } from "../format.ts";
 const textCache = new WeakMap<object, string | null>();
 const thinkingCache = new WeakMap<object, string | null>();
 
+/** Replace known proxy/container error HTML so we don't render it as assistant text. */
+function replaceErrorPageHtml(text: string): string {
+  const t = text.trim();
+  if (!t) return text;
+  if (/<\s*!?\s*DOCTYPE\s+html\s*>/i.test(t) && /Azure Container App\s*-\s*Unavailable/i.test(t)) {
+    return "The gateway is unavailable (404). Check that the app is running and ingress is configured — see .deploy/README.md.";
+  }
+  if (/<\s*!?\s*DOCTYPE\s+html\s*>/i.test(t) && /\b404\b/i.test(t)) {
+    return "The server returned a 404 error page. Check the gateway URL and that the backend is reachable.";
+  }
+  return text;
+}
+
 export function extractText(message: unknown): string | null {
   const m = message as Record<string, unknown>;
   const role = typeof m.role === "string" ? m.role : "";
   const shouldStripInboundMetadata = role.toLowerCase() === "user";
   const content = m.content;
   if (typeof content === "string") {
-    const processed =
+    let processed =
       role === "assistant"
         ? stripThinkingTags(content)
         : shouldStripInboundMetadata
           ? stripInboundMetadata(stripEnvelope(content))
           : stripEnvelope(content);
+    if (role === "assistant") processed = replaceErrorPageHtml(processed);
     return processed;
   }
   if (Array.isArray(content)) {
@@ -31,22 +45,24 @@ export function extractText(message: unknown): string | null {
       .filter((v): v is string => typeof v === "string");
     if (parts.length > 0) {
       const joined = parts.join("\n");
-      const processed =
+      let processed =
         role === "assistant"
           ? stripThinkingTags(joined)
           : shouldStripInboundMetadata
             ? stripInboundMetadata(stripEnvelope(joined))
             : stripEnvelope(joined);
+      if (role === "assistant") processed = replaceErrorPageHtml(processed);
       return processed;
     }
   }
   if (typeof m.text === "string") {
-    const processed =
+    let processed =
       role === "assistant"
         ? stripThinkingTags(m.text)
         : shouldStripInboundMetadata
           ? stripInboundMetadata(stripEnvelope(m.text))
           : stripEnvelope(m.text);
+    if (role === "assistant") processed = replaceErrorPageHtml(processed);
     return processed;
   }
   return null;

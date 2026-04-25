@@ -208,6 +208,23 @@ export const SkillsUpdateParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const SkillsFileGetParamsSchema = Type.Object(
+  {
+    skillKey: NonEmptyString,
+    agentId: Type.Optional(NonEmptyString),
+  },
+  { additionalProperties: false },
+);
+
+export const SkillsFileGetResultSchema = Type.Object(
+  {
+    skillKey: NonEmptyString,
+    path: Type.String(),
+    content: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
 export const ToolsCatalogParamsSchema = Type.Object(
   {
     agentId: Type.Optional(NonEmptyString),

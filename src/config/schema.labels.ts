@@ -746,4 +746,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "plugins.installs.*.shasum": "Plugin Resolved Shasum",
   "plugins.installs.*.resolvedAt": "Plugin Resolution Time",
   "plugins.installs.*.installedAt": "Plugin Install Time",
+  neus: "Included Proofs",
+  "neus.includedProofIds": "Proof IDs",
+  "neus.apiBaseUrl": "NEUS API Base URL",
 };

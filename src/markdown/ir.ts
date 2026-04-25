@@ -1,4 +1,4 @@
-import MarkdownIt from "markdown-it/index.js";
+import MarkdownIt from "markdown-it";
 import { chunkText } from "../auto-reply/chunk.ts";
 import type { MarkdownTableMode } from "../config/types.base.ts";
 

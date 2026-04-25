@@ -173,9 +173,16 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
         }
       }
     } catch (err) {
-      defaultRuntime.error(`Force: ${String(err)}`);
-      defaultRuntime.exit(1);
-      return;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("lsof not found") || msg.includes("required for --force")) {
+        gatewayLog.info(
+          `force: lsof not available (e.g. on Windows); skipping port kill. If port ${port} is in use, close the other process or use a different port.`,
+        );
+      } else {
+        defaultRuntime.error(`Force: ${msg}`);
+        defaultRuntime.exit(1);
+        return;
+      }
     }
   }
   if (opts.token) {

@@ -1,5 +1,5 @@
 import { html, nothing } from "lit";
-import type { SkillMessageMap } from "../controllers/skills.ts";
+import type { SkillFileView, SkillMessageMap } from "../controllers/skills.ts";
 import { clampText } from "../format.ts";
 import type { SkillStatusEntry, SkillStatusReport } from "../types.ts";
 import { groupSkills } from "./skills-grouping.ts";
@@ -17,12 +17,15 @@ export type SkillsProps = {
   edits: Record<string, string>;
   busyKey: string | null;
   messages: SkillMessageMap;
+  skillFileView: SkillFileView;
   onFilterChange: (next: string) => void;
   onRefresh: () => void;
   onToggle: (skillKey: string, enabled: boolean) => void;
   onEdit: (skillKey: string, value: string) => void;
   onSaveKey: (skillKey: string) => void;
   onInstall: (skillKey: string, name: string, installId: string) => void;
+  onViewFile: (skillKey: string, name: string) => void;
+  onCloseFileView: () => void;
 };
 
 export function renderSkills(props: SkillsProps) {
@@ -89,7 +92,57 @@ export function renderSkills(props: SkillsProps) {
             </div>
           `
       }
+
+      ${renderSkillFileModal(props)}
     </section>
+  `;
+}
+
+function renderSkillFileModal(props: SkillsProps) {
+  const view = props.skillFileView;
+  if (!view.skillKey) {
+    return nothing;
+  }
+  return html`
+    <div
+      class="exec-approval-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="skill-file-modal-title"
+    >
+      <div class="exec-approval-card" style="max-width: 90vw; width: 720px; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="exec-approval-header" style="flex-shrink: 0;">
+          <div>
+            <div id="skill-file-modal-title" class="exec-approval-title">${view.name}</div>
+            ${view.path ? html`<div class="exec-approval-sub muted">${view.path}</div>` : nothing}
+          </div>
+          <button
+            type="button"
+            class="btn"
+            aria-label="Close"
+            @click=${props.onCloseFileView}
+          >
+            Close
+          </button>
+        </div>
+        <div style="flex: 1; min-height: 0; overflow: auto; margin-top: 12px;">
+          ${
+            view.loading
+              ? html`<div class="muted">Loading…</div>`
+              : view.error
+                ? html`<div class="callout danger">${view.error}</div>`
+                : view.content != null
+                  ? html`
+                      <pre
+                        class="mono"
+                        style="margin: 0; padding: 12px; font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid rgba(212,175,55,0.2);"
+                      >${view.content}</pre>
+                    `
+                  : nothing
+          }
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -129,7 +182,14 @@ function renderSkill(skill: SkillStatusEntry, props: SkillsProps) {
         }
       </div>
       <div class="list-meta">
-        <div class="row" style="justify-content: flex-end; flex-wrap: wrap;">
+        <div class="row" style="justify-content: flex-end; flex-wrap: wrap; gap: 8px;">
+          <button
+            class="btn"
+            ?disabled=${busy}
+            @click=${() => props.onViewFile(skill.skillKey, skill.name)}
+          >
+            View
+          </button>
           <button
             class="btn"
             ?disabled=${busy}

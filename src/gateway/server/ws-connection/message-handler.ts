@@ -39,6 +39,7 @@ import {
   isTrustedProxyAddress,
   resolveClientIp,
 } from "../../net.ts";
+import { CLI_DEFAULT_OPERATOR_SCOPES } from "../../method-scopes.ts";
 import { resolveNodeCommandAllowlist } from "../../node-command-policy.ts";
 import { checkBrowserOrigin } from "../../origin-check.ts";
 import { GATEWAY_CLIENT_IDS } from "../../protocol/client-info.ts";
@@ -474,6 +475,13 @@ export function attachGatewayWsMessageHandler(params: {
         };
         if (!handleMissingDeviceIdentity()) {
           return;
+        }
+        // Control UI with token/password but no device had scopes cleared above.
+        // Grant full operator scopes so cron list/run and other operator methods work.
+        if (!device && sharedAuthOk && (isControlUi || isWebchat)) {
+          scopes.length = 0;
+          scopes.push(...CLI_DEFAULT_OPERATOR_SCOPES);
+          connectParams.scopes = scopes;
         }
         if (device) {
           const rejectDeviceAuthInvalid = (reason: string, message: string) => {

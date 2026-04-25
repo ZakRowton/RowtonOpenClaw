@@ -792,9 +792,9 @@ describe("gateway server auth/connect", () => {
       },
     });
     expect(res.ok).toBe(true);
+    // Shared-auth Control UI without device is granted full operator scopes so cron page etc work.
     const status = await rpcReq(ws, "status");
-    expect(status.ok).toBe(false);
-    expect(status.error?.message ?? "").toContain("missing scope");
+    expect(status.ok).toBe(true);
     const health = await rpcReq(ws, "health");
     expect(health.ok).toBe(true);
     ws.close();
@@ -815,9 +815,9 @@ describe("gateway server auth/connect", () => {
         },
       });
       expect(res.ok).toBe(true);
+      // Shared-auth Control UI without device is granted full operator scopes.
       const status = await rpcReq(ws, "status");
-      expect(status.ok).toBe(false);
-      expect(status.error?.message ?? "").toContain("missing scope");
+      expect(status.ok).toBe(true);
       const health = await rpcReq(ws, "health");
       expect(health.ok).toBe(true);
       ws.close();

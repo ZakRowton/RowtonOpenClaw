@@ -273,6 +273,11 @@ const sidebarIcons = {
       <path d="m19.07 10.93-4.24 4.24"></path>
     </svg>
   `,
+  neus: html`
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+    </svg>
+  `,
   default: html`
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -295,6 +300,7 @@ const SECTIONS: Array<{ key: string; label: string }> = [
   { key: "tools", label: "Tools" },
   { key: "gateway", label: "Gateway" },
   { key: "wizard", label: "Setup Wizard" },
+  { key: "neus", label: "Included Proofs" },
 ];
 
 type SubsectionEntry = {
@@ -407,9 +413,11 @@ export function renderConfig(props: ConfigProps) {
   const analysis = analyzeConfigSchema(props.schema);
   const formUnsafe = analysis.schema ? analysis.unsupportedPaths.length > 0 : false;
 
-  // Get available sections from schema
+  // Get available sections from schema (always include "neus" for Included Proofs)
   const schemaProps = analysis.schema?.properties ?? {};
-  const availableSections = SECTIONS.filter((s) => s.key in schemaProps);
+  const availableSections = SECTIONS.filter(
+    (s) => s.key in schemaProps || s.key === "neus",
+  );
 
   // Add any sections in schema but not in our list
   const knownKeys = new Set(SECTIONS.map((s) => s.key));

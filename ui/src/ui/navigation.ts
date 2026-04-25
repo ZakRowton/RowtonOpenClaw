@@ -5,40 +5,28 @@ export const TAB_GROUPS = [
   { label: "chat", tabs: ["chat"] },
   {
     label: "control",
-    tabs: ["overview", "channels", "instances", "sessions", "usage", "cron"],
+    tabs: ["overview", "cron"],
   },
-  { label: "agent", tabs: ["agents", "skills", "nodes"] },
-  { label: "settings", tabs: ["config", "debug", "logs"] },
+  { label: "agent", tabs: ["agents", "skills"] },
+  { label: "settings", tabs: ["config", "logs"] },
 ] as const;
 
 export type Tab =
   | "agents"
   | "overview"
-  | "channels"
-  | "instances"
-  | "sessions"
-  | "usage"
   | "cron"
   | "skills"
-  | "nodes"
   | "chat"
   | "config"
-  | "debug"
   | "logs";
 
 const TAB_PATHS: Record<Tab, string> = {
   agents: "/agents",
   overview: "/overview",
-  channels: "/channels",
-  instances: "/instances",
-  sessions: "/sessions",
-  usage: "/usage",
   cron: "/cron",
   skills: "/skills",
-  nodes: "/nodes",
   chat: "/chat",
   config: "/config",
-  debug: "/debug",
   logs: "/logs",
 };
 
@@ -131,24 +119,12 @@ export function iconForTab(tab: Tab): IconName {
       return "messageSquare";
     case "overview":
       return "barChart";
-    case "channels":
-      return "link";
-    case "instances":
-      return "radio";
-    case "sessions":
-      return "fileText";
-    case "usage":
-      return "barChart";
     case "cron":
       return "loader";
     case "skills":
       return "zap";
-    case "nodes":
-      return "monitor";
     case "config":
       return "settings";
-    case "debug":
-      return "bug";
     case "logs":
       return "scrollText";
     default:
